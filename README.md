@@ -49,3 +49,39 @@ Flask server that ties the whole system together for live operation. Receives up
 dashboard.py
 
 Streamlit dashboard for offline/historical analysis of logged results. Reads the CSV log(s) produced by Server_update.py and visualizes inspection counts, pass/fail ratio, defect-type frequency, temperature/humidity trends and their correlation with defect rate, throughput, and prediction confidence distribution (including a low-confidence review list).
+
+esp32cam_client.ino — Wi-Fi HTTP Upload
+
+Firmware for an AI-Thinker ESP32-CAM module that captures photos and uploads them to a Flask server over Wi-Fi.
+
+What it does:
+
+Initializes the OV2640 camera (JPEG output, VGA/SVGA depending on PSRAM availability)
+Connects to a Wi-Fi network (WIFI_STA mode, with auto-reboot on failure)
+Every ~3 seconds (after a countdown), captures a JPEG frame and sends it via HTTP POST to a Flask endpoint (http://<PC_IP>:5000/upload)
+Each request includes an X-Photo-Index header for sequencing, and Content-Type: image/jpeg
+Automatically attempts Wi-Fi reconnection if the connection drops
+
+Requirements: ESP32-CAM board must be on the same Wi-Fi network/subnet as the PC running the Flask server. Update ssid, password, and serverUrl (server's local IP) before flashing.
+
+Use case: Best when the ESP32-CAM has reliable Wi-Fi access and you want a simple network-based image pipeline.
+
+esp32cam_serial.ino — USB Serial Streaming
+
+Firmware for the same ESP32-CAM hardware that streams photos to a host PC over a USB/UART serial connection instead of Wi-Fi — useful when no Wi-Fi network is available or a wired connection is preferred.
+
+What it does:
+
+Initializes the camera identically to the Wi-Fi version
+Captures a JPEG frame every 5 seconds (CAPTURE_INTERVAL_MS)
+Sends each frame over serial (baud rate 921600) using a custom binary framing protocol:
+  [4-byte start marker: AA 55 AA 55]
+  [4-byte length (uint32, frame size)]
+  [JPEG image data]
+  [2-byte checksum (sum of all bytes, mod 0xFFFF)]
+  [4-byte end marker: 55 AA 55 AA]
+On camera init failure, blinks an onboard LED (pin 4) as an error indicator instead of logging to Serial (since Serial is used for data, not debug text)
+
+Python-side counterpart: Your Python script should open the serial port at 921600 baud, scan for the start marker, read the length field, read exactly that many bytes as JPEG data, then validate the checksum and end marker before saving/displaying the frame.
+
+Use case: Best when a direct USB cable connection to the host PC is available and you want to avoid Wi-Fi networking/latency.
